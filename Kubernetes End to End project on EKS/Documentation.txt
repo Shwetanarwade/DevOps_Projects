@@ -1,0 +1,88 @@
+1. Once you install all requirement from requirement.txt you need to configure aws account
+
+      -- aws configure
+
+2. Create eks cluster using fargate
+
+    -- eksctl create cluster --name fargate-cluster --region us-east-2 --fargate
+
+3. configure kubectl to access your Amazon EKS cluster
+
+   -- aws eks update-kubeconfig --name fargate-cluster --region us-east-2
+
+4. Create Fargate profile (if you want create or attach different namespace other than default
+   you need to create a fargateprofile)
+
+  -- eksctl create fargateprofile \
+    --cluster demo-cluster \
+    --region us-east-1 \
+    --name alb-sample-app \
+    --namespace game-2048
+
+5. Deploy the deployment, service and Ingress
+  
+   -- kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.5.4/docs/examples/2048/2048_full.yaml
+
+6. Create IAM OIDC provider (An OIDC provider lets Kubernetes service accounts use IAM permissions securely,
+   so that pods can access AWS services (like S3, DynamoDB, etc.) 
+   without storing AWS credentials inside the container)
+ 
+   --eksctl utils associate-iam-oidc-provider --cluster $cluster_name --approve
+
+7. How to setup alb add on
+   Download IAM policy
+
+ --curl -O https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/v2.11.0/docs/install/iam_policy.json
+
+8. Create IAM Policy
+
+aws iam create-policy \
+    --policy-name AWSLoadBalancerControllerIAMPolicy \
+    --policy-document file://iam_policy.json
+
+
+10. Create IAM Role(In Amazon EKS, service accounts are used to attach IAM roles to pods 
+    using IAM Roles for Service Accounts (IRSA).)
+
+eksctl create iamserviceaccount \
+  --cluster=<your-cluster-name> \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --role-name AmazonEKSLoadBalancerControllerRole \
+  --attach-policy-arn=arn:aws:iam::<your-aws-account-id>:policy/AWSLoadBalancerControllerIAMPolicy \
+  --approve
+
+13. Download the helmchart
+  
+   -- curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+***Deploy ALB controller**
+    
+14. Add helm repo
+
+  -- helm repo add eks https://aws.github.io/eks-charts
+
+15. Update the repo
+
+  -- helm repo update eks
+
+16. Install
+
+ -- helm install aws-load-balancer-controller eks/aws-load-balancer-controller \            
+  -n kube-system \
+  --set clusterName=<your-cluster-name> \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=<region> \
+  --set vpcId=<your-vpc-id>
+
+
+17. Verify that the deployments are running.
+
+ -- kubectl get deployment -n kube-system aws-load-balancer-controller
+
+18. Access the application 
+
+--  kubectl get ingress -n game-2048
+
+    Copy the address of ingress and accessit from browser
